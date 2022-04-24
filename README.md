@@ -5,6 +5,7 @@ Simple script that lets you pass aruments to mpv-android, without root access
 ```
 termux-setup-storage
 curl -sL https://raw.githubusercontent.com/TheGlockMisc/mpv-android-argparse/master/mpv -o $PREFIX/bin/mpv
+chmod +x $PREFIX/bin/mpv
 ```
 # Setup
 - Open MPV android
