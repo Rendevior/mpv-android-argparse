@@ -1,0 +1,104 @@
+#!/bin/sh
+
+# mpv-android-argparse
+#
+# Github: https://github.com/TheGlockMisc/mpv-android-argparse
+
+VERSION="v0.0.1"
+
+app_readable_dir="/storage/emulated/0/mpv"
+app_readable_file="${app_readable_dir}/mpv.tmp"
+[ ! -t 0 ] && stdinurl="$(awk '{print $0}')"
+
+# Input Colors
+err(){
+	printf "\033[38;5;1m%b\033[0m\n" "${1}" >&2
+	show_help
+	exit 1
+}
+suc(){
+	printf "\033[38;5;2m%b\033[0m\n" "${1}"
+}
+
+if [ -w "/storage/emulated/0" ]; then
+	if ! [ -d "${app_readable_dir}" ]; then
+		mkdir "${app_readable_dir}"
+	fi
+	else
+		err 'Exception: "/storage/emulated/0" is unwritable, make sure you have storage permission'
+fi
+
+show_help(){
+	while IFS= read -r line; do
+		printf "%b\n" "${line}"
+	done <<-EOF
+	Program that lets you pass argument to mpv-android.
+	
+	 Usage:
+	    ${0##*/} [URL|-] <args>
+	    ${0##*/} -v | -h
+		
+	 Options:
+	    -v Print Version and Exit
+	    -h Print Help
+		
+	Use "-" to receive url from stdin.
+	"--http-header-fields" headers was delimited using "|".
+	
+	More info: <https://mpv.io/>.
+	Check out manual: <https://mpv.io/manual/master/>.
+	EOF
+}
+
+# main
+mainstripper(){
+	printf '%s\n' "${@}" | \
+	sed -E 's_---__g	
+	s_--__g' | \
+	sed -E "1d
+	s_[\]__g
+	s_\x27__g
+	s_\x22__g
+	/.*=/ {
+		s_(=)(.*)_\1\x22\2\x22_
+		s_[[:space:]]\x22\$_\x22_g
+	}
+	/http-header/ {
+		s_\x22__g
+		s_(=)(.*)_\1\x27\2\x27_
+		s_\|_\x27, \x27_g
+	}
+	s_[[:space:]]\$__g
+	s_\x27[[:space:]]_\x27_g"
+}
+
+start_mpv(){
+	[ "${1}" = "-" ] && set -- "${stdinurl}"
+	[ -z "${1}" ] && err 'Exception: No Video URL provided'
+	if ! printf '%s' "${1}" | grep -Eo "file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/[^'\"<>]*" >/dev/null 2>&1; then
+		err 'Exception: Invalid video url'
+	fi
+	am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
+	suc "Video Successfully Launched!"
+	# Delay to start activity first before clearing the temp file
+	sleep 5
+	: > "${app_readable_file}"
+}
+
+arg_parser(){
+	case "${1}" in
+		-v)
+			printf '%s\n' "Version: ${VERSION}"
+			exit 0
+			;;
+		-h)
+			show_help
+			exit 0
+			;;
+	esac
+}
+
+
+arg_parser "${@}"
+mainstripper "${@}" > "${app_readable_file}"
+start_mpv "${1}"
