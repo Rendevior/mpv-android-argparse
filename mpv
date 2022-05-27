@@ -4,7 +4,7 @@
 #
 # Github: https://github.com/TheGlockMisc/mpv-android-argparse
 
-VERSION="v0.0.1"
+VERSION="v0.1.0"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp"
@@ -13,17 +13,16 @@ app_readable_file="${app_readable_dir}/mpv.tmp"
 # Input Colors
 err(){
 	printf "\033[38;5;1m%b\033[0m\n" "${1}" >&2
-	show_help
 	exit 1
 }
+
 suc(){
 	printf "\033[38;5;2m%b\033[0m\n" "${1}"
 }
 
 if [ -w "/storage/emulated/0" ]; then
-	if ! [ -d "${app_readable_dir}" ]; then
-		mkdir "${app_readable_dir}"
-	fi
+		[ -d "${app_readable_dir}" ] || mkdir "${app_readable_dir}"
+		[ -e "${app_readable_dir}/var.log" ] && : > "${app_readable_dir}/var.log"
 	else
 		err 'Exception: "/storage/emulated/0" is unwritable, make sure you have storage permission'
 fi
@@ -36,11 +35,12 @@ show_help(){
 	
 	 Usage:
 	    ${0##*/} [URL|-] <args>
-	    ${0##*/} -v | -h
+	    ${0##*/} -v | -h | -l
 		
 	 Options:
 	    -v Print Version and Exit
 	    -h Print Help
+	    -l Dump Log in stdout (default: disabled)
 		
 	Use "-" to receive url from stdin.
 	"--http-header-fields" headers was delimited using "|".
@@ -55,13 +55,16 @@ mainstripper(){
 	printf '%s\n' "${@}" | \
 	sed -E 's_---__g	
 	s_--__g' | \
-	sed -E "1d
+	sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l)$/d
 	s_[\]__g
 	s_\x27__g
 	s_\x22__g
 	/.*=/ {
 		s_(=)(.*)_\1\x22\2\x22_
 		s_[[:space:]]\x22\$_\x22_g
+	}
+	/msg-level/ {
+		s_\x22__g
 	}
 	/http-header/ {
 		s_\x22__g
@@ -73,32 +76,43 @@ mainstripper(){
 }
 
 start_mpv(){
-	[ "${1}" = "-" ] && set -- "${stdinurl}"
+	for iter; do
+		if printf '%s' "${iter}" | grep -qEo "^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)[^'\"<>]*|^-$"; then
+			[ "${iter}" = "-" ] && set -- "${stdinurl}" && break
+			set -- "${iter}" && break
+		fi
+	done
 	[ -z "${1}" ] && err 'Exception: No Video URL provided'
-	if ! printf '%s' "${1}" | grep -Eo "file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/[^'\"<>]*" >/dev/null 2>&1; then
-		err 'Exception: Invalid video url'
+	if ! printf '%s' "${1}" | grep -qEo "(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)[^'\"<>]*"; then
+		err 'Invalid type of URL'
 	fi
 	am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
 	suc "Video Successfully Launched!"
 	# Delay to start activity first before clearing the temp file
-	sleep 5
-	: > "${app_readable_file}"
+	nohup "$(sleep 5 && : > "${app_readable_file}")" > /dev/null 2>&1 &
+	if [ "${show_log}" = "true" ]; then
+		tail -f "${app_readable_dir}/var.log"
+	fi
 }
 
 arg_parser(){
-	case "${1}" in
-		-v)
-			printf '%s\n' "Version: ${VERSION}"
-			exit 0
-			;;
-		-h)
-			show_help
-			exit 0
-			;;
-	esac
+	for arg; do
+		case "${arg}" in
+			-v)
+				printf '%s\n' "Version: ${VERSION}"
+				exit 0
+				;;
+			-h)
+				show_help
+				exit 0
+				;;
+			-l)
+				show_log="true"
+				;;
+		esac
+	done
 }
 
-
 arg_parser "${@}"
-mainstripper "${@}" > "${app_readable_file}"
-start_mpv "${1}"
+mainstripper "${@}" "--log-file=${app_readable_dir}/var.log" > "${app_readable_file}"
+start_mpv "${@}"
