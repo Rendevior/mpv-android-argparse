@@ -4,7 +4,7 @@
 #
 # Github: https://github.com/TheGlockMisc/mpv-android-argparse
 
-VERSION="v0.1.1"
+VERSION="v0.1.2"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp"
@@ -76,14 +76,11 @@ mainstripper(){
 }
 
 inter_loop(){
-	saveterm="$(stty -g)"
-	stty -echo -icanon min 1 time 0
 	tail -f "${app_readable_dir}/var.log" 2>/dev/null | grep --line-buffer -v "vo/gpu/opengl" &
-	trap "stty ""$saveterm"" && killall -9 tail && exit 1" INT HUP
+	trap "killall -9 tail && exit 1" INT HUP
 	while true; do
 		sleep 3
 		if grep -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)' "${app_readable_dir}/var.log"; then
-			stty "${saveterm}"
 			killall -9 tail
 			exit 0
 		fi
