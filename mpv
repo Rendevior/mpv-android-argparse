@@ -4,7 +4,7 @@
 #
 # Github: https://github.com/TheGlockMisc/mpv-android-argparse
 
-VERSION="v0.1.0"
+VERSION="v0.1.1"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp"
@@ -75,6 +75,21 @@ mainstripper(){
 	s_\x27[[:space:]]_\x27_g"
 }
 
+inter_loop(){
+	saveterm="$(stty -g)"
+	stty -echo -icanon min 1 time 0
+	tail -f "${app_readable_dir}/var.log" 2>/dev/null | grep --line-buffer -v "vo/gpu/opengl" &
+	trap "stty ""$saveterm"" && killall -9 tail && exit 1" INT HUP
+	while true; do
+		sleep 3
+		if grep -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)' "${app_readable_dir}/var.log"; then
+			stty "${saveterm}"
+			killall -9 tail
+			exit 0
+		fi
+	done
+}
+
 start_mpv(){
 	for iter; do
 		if printf '%s' "${iter}" | grep -qEo "^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)[^'\"<>]*|^-$"; then
@@ -91,7 +106,7 @@ start_mpv(){
 	# Delay to start activity first before clearing the temp file
 	nohup "$(sleep 5 && : > "${app_readable_file}")" > /dev/null 2>&1 &
 	if [ "${show_log}" = "true" ]; then
-		tail -f "${app_readable_dir}/var.log"
+		inter_loop
 	fi
 }
 
