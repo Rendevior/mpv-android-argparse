@@ -4,7 +4,7 @@
 #
 # Github: https://github.com/TheGlockMisc/mpv-android-argparse
 
-VERSION="v0.1.2"
+VERSION="v0.1.3"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp"
@@ -20,11 +20,11 @@ suc(){
 	printf "\033[38;5;2m%b\033[0m\n" "${1}"
 }
 
-if [ -w "/storage/emulated/0" ]; then
-		[ -d "${app_readable_dir}" ] || mkdir "${app_readable_dir}"
-		[ -e "${app_readable_dir}/var.log" ] && : > "${app_readable_dir}/var.log"
-	else
-		err 'Exception: "/storage/emulated/0" is unwritable, make sure you have storage permission'
+if [ -w "${app_readable_dir%*/mpv}" ]; then
+	[ -d "${app_readable_dir}" ] || mkdir "${app_readable_dir}"
+	[ -e "${app_readable_dir}/var.log" ] && : > "${app_readable_dir}/var.log"
+else
+	err "Exception: \"${app_readable_dir%*/mpv}\" is unwritable, make sure you have storage permission"
 fi
 
 show_help(){
@@ -101,7 +101,7 @@ start_mpv(){
 	am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
 	suc "Video Successfully Launched!"
 	# Delay to start activity first before clearing the temp file
-	nohup "$(sleep 5 && : > "${app_readable_file}")" > /dev/null 2>&1 &
+	(sleep 5 && : > "${app_readable_file}") &
 	if [ "${show_log}" = "true" ]; then
 		inter_loop
 	fi
