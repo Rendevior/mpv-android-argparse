@@ -4,10 +4,10 @@
 #
 # Github: https://github.com/TheGlockMisc/mpv-android-argparse
 
-VERSION="v0.1.4"
+VERSION="v0.1.5"
 
 app_readable_dir="/storage/emulated/0/mpv"
-app_readable_file="${app_readable_dir}/mpv.tmp"
+app_readable_file="${app_readable_dir}/mpv.tmp.mp4"	# mp4 extension to bypass restriction for multimedia only permission
 [ ! -t 0 ] && stdinurl="$(awk '{print $0}')"
 
 # Input Colors
@@ -79,10 +79,7 @@ inter_loop(){
 	trap "killall -9 tail && exit 1" INT HUP
 	while true; do
 		sleep 3
-		if grep -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)' "${app_readable_dir}/var.log"; then
-			killall -9 tail
-			exit 0
-		fi
+		grep -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)' "${app_readable_dir}/var.log" && { pkill -9 tail ; exit 0 ;}
 	done
 }
 
@@ -94,16 +91,12 @@ start_mpv(){
 		fi
 	done
 	[ -z "${1}" ] && err 'Exception: No Video URL provided'
-	if ! printf '%s' "${1}" | grep -qEo "(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)[^'\"<>]*"; then
-		err 'Invalid type of URL'
-	fi
+	printf '%s' "${1}" | grep -qEo "(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)[^'\"<>]*" || err "Invalid type of URL"
 	am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
 	suc "Video Successfully Launched!"
 	# Delay to start activity first before clearing the temp file
 	(sleep 5 && : > "${app_readable_file}") &
-	if [ "${show_log}" = "true" ]; then
-		inter_loop
-	fi
+	[ "${show_log}" = "true" ] && inter_loop
 }
 
 arg_parser(){
