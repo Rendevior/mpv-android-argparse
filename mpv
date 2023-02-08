@@ -4,7 +4,7 @@
 #
 # Github: https://github.com/TheGlockMisc/mpv-android-argparse
 
-VERSION="v0.1.5"
+VERSION="v0.1.6"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp.mp4"	# mp4 extension to bypass restriction for multimedia only permission
@@ -39,6 +39,7 @@ show_help(){
 		
 	 Options:
 	    -v Print Version and Exit
+	    -q Only output errors
 	    -h Print Help
 	    -l Dump Log in stdout (default: disabled)
 		
@@ -79,21 +80,26 @@ inter_loop(){
 	trap "killall -9 tail && exit 1" INT HUP
 	while true; do
 		sleep 3
-		grep -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)' "${app_readable_dir}/var.log" && { pkill -9 tail ; exit 0 ;}
+		grep -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)' "${app_readable_dir}/var.log" && { killall -9 tail ; exit 0 ;}
 	done
 }
 
 start_mpv(){
 	for iter; do
-		if printf '%s' "${iter}" | grep -qEo "^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)[^'\"<>]*|^-$"; then
+		if printf '%s' "${iter}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$"; then
 			[ "${iter}" = "-" ] && set -- "${stdinurl}" && break
 			set -- "${iter}" && break
 		fi
 	done
 	[ -z "${1}" ] && err 'Exception: No Video URL provided'
-	printf '%s' "${1}" | grep -qEo "(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)[^'\"<>]*" || err "Invalid type of URL"
+	printf '%s' "${1}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$" || err "Invalid type of URL"
+	if printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*" && [ -e "${1#file://}" ]; then
+		set -- "file://$(realpath "${1#file://}")"
+	else
+		err "mpv: ${1#file://}: No such file or directory"
+	fi
 	am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
-	suc "Video Successfully Launched!"
+	[ "${quiet}" = "1" ] || suc "Video Successfully Launched!"
 	# Delay to start activity first before clearing the temp file
 	(sleep 5 && : > "${app_readable_file}") &
 	[ "${show_log}" = "true" ] && inter_loop
@@ -105,6 +111,9 @@ arg_parser(){
 			-v)
 				printf '%s\n' "Version: ${VERSION}"
 				exit 0
+				;;
+			-q)
+				quiet=1
 				;;
 			-h)
 				show_help
