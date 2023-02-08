@@ -13,7 +13,7 @@ chmod +x "$PREFIX/bin/mpv"
 - Settings
 - Advanced
 - Edit mpv.conf
-- And insert this `include="/storage/emulated/0/mpv/mpv.tmp"`
+- And insert this `include="/storage/emulated/0/mpv/mpv.mp4"`
 - Click "Save"
 # How to Run
 Thats it:
