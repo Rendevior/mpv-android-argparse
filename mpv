@@ -106,12 +106,12 @@ start_mpv(){
 	done
 	[ -z "${1}" ] && err 'Exception: No Video URL provided'
 	printf '%s' "${1}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$" || err "Invalid type of URL"
-	if printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*" && [ -e "${1#file://}" ]; then
-		set -- "file://$(realpath "${1#file://}")"
-	else
-		err "mpv: ${1#file://}: No such file or directory"
+	if printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
+		path_file="$(realpath "${1#file://}")"
+		[ -e "${path_file#file://}" ] && err "mpv: ${path_file#file://}: No such file or directory"
+		set -- "file://${path_file}"
 	fi
-	if [ "${nc_use}" = "1" ]; then
+	if [ "${nc_use}" = "1" ] && printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
 		command -v "nc" >/dev/null || err "Install netcat first!"
 		random_port="$(awk -v lh="3000" -v rh="7000" 'BEGIN{srand(); print int(lh+rand()*(rh-lh+1))}')"
 		nc_file "${1}" "${random_port}" &
@@ -153,4 +153,4 @@ arg_parser(){
 arg_parser "${@}"
 mainstripper "${@}" "--log-file=${app_readable_dir}/var.log" > "${app_readable_file}"
 start_mpv "${@}"
-[ "${nc_use}" = "1" ] && wait "${nc_pid}"
+[ -n "${nc_pid}" ] && wait "${nc_pid}"
