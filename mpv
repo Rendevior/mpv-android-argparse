@@ -108,7 +108,7 @@ start_mpv(){
 	printf '%s' "${1}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$" || err "Invalid type of URL"
 	if printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
 		path_file="$(realpath "${1#file://}")"
-		[ -e "${path_file#file://}" ] && err "mpv: ${path_file#file://}: No such file or directory"
+		[ -e "${path_file#file://}" ] || err "mpv: ${path_file#file://}: No such file or directory"
 		set -- "file://${path_file}"
 	fi
 	if [ "${nc_use}" = "1" ] && printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
