@@ -20,6 +20,15 @@ suc(){
 	printf "\033[38;5;2m%b\033[0m\n" "${1}"
 }
 
+kill_jobs(){
+	kill "${lc_pid}"
+	if [ -n "$(jobs -p)" ]; then
+		jobs -p | while read -r jobs; do
+			kill "${jobs}"
+		done
+	fi
+}
+
 if [ -w "${app_readable_dir%*/mpv}" ]; then
 	[ -d "${app_readable_dir}" ] || mkdir "${app_readable_dir}"
 	[ -e "${app_readable_dir}/var.log" ] && : > "${app_readable_dir}/var.log"
@@ -38,11 +47,11 @@ show_help(){
 	    ${0##*/} -v | -h | -l
 		
 	 Options:
-	    -v Print Version and Exit
-	    -q Only output errors
-	    -nc Use netcat (for local termux files)
-	    -h Print Help
-	    -l Dump Log in stdout (default: disabled)
+	    -v  Print Version and Exit
+	    -q  Only output errors
+	    -lc Use http server (for local termux files)
+	    -h  Print Help
+	    -l  Dump Log in stdout (default: disabled)
 		
 	Use "-" to receive url from stdin.
 	"--http-header-fields" headers was delimited using "|".
@@ -57,7 +66,7 @@ mainstripper(){
 	printf '%s\n' "${@}" | \
 	sed -E 's_---__g	
 	s_--__g' | \
-	sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|nc)$/d
+	sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc)$/d
 	s_\x27__g
 	s_\x22__g
 	/.*=/ {
@@ -85,18 +94,6 @@ inter_loop(){
 	done
 }
 
-nc_file(){
-	set -- "${1#file://}" "${2}"
-	while true; do
-		if [ -e "${1}" ] && [ -n "${2}" ]; then
-			{ printf "HTTP/1.0 200 OK\r\nContent-Disposition: inline; filename=\"%s\"\r\nContent-Length: $(wc -c < "${1}")\r\n\r\n" "${1}"; cat "${1}"; } | nc -l "${2}" >/dev/null 2>&1
-			[ -n "$!" ] && kill -9 "$!"
-		else
-			break
-		fi
-	done
-}
-
 start_mpv(){
 	for iter; do
 		if printf '%s' "${iter}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$"; then
@@ -107,17 +104,25 @@ start_mpv(){
 	[ -z "${1}" ] && err 'Exception: No Video URL provided'
 	printf '%s' "${1}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$" || err "Invalid type of URL"
 	if printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
-		path_file="$(realpath "${1#file://}")"
-		[ -e "${path_file#file://}" ] || err "mpv: ${path_file#file://}: No such file or directory"
+		if printf '%s' "${1#file://}" | grep -qE '~'; then
+			path_file=~/"${1#*~/}"
+			path_file="$(realpath -q "${path_file#file://}")"
+		else
+			path_file="$(realpath -q "${1#file://}")"
+		fi
+		[ -e "${path_file}" ] || err "mpv: ${path_file#file://}: No such file or directory"
 		set -- "file://${path_file}"
 	fi
-	if [ "${nc_use}" = "1" ] && printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
-		command -v "nc" >/dev/null || err "Install netcat first!"
+	if [ "${lc_use}" = "1" ] && printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
+		command -v "darkhttpd" >/dev/null || err "Install darkhttpd first!"
 		random_port="$(awk -v lh="3000" -v rh="7000" 'BEGIN{srand(); print int(lh+rand()*(rh-lh+1))}')"
-		nc_file "${1}" "${random_port}" &
-		nc_pid="${!}"
+		dir_file="${1#file://}" dir_file="${dir_file%/*}"
+		name_file="${1##*/}"
+		darkhttpd "${dir_file}" --index "${name_file}" --port "${random_port}" >/dev/null 2>&1 &
+		lc_pid="${!}"
+		[ "${quiet}" = "1" ] || suc 'press "CTRL + C" to quit'
 		set -- "http://0.0.0.0:${random_port}"
-		trap "kill -9 \\"${nc_pid}\\" && exit 0" INT HUP
+		trap "kill_jobs ; exit 0" INT HUP
 	fi
 	am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
 	[ "${quiet}" = "1" ] || suc "Video Successfully Launched!"
@@ -136,8 +141,8 @@ arg_parser(){
 			-q)
 				quiet=1
 				;;
-			-nc)
-				nc_use=1
+			-lc)
+				lc_use=1
 				;;
 			-h)
 				show_help
@@ -153,4 +158,4 @@ arg_parser(){
 arg_parser "${@}"
 mainstripper "${@}" "--log-file=${app_readable_dir}/var.log" > "${app_readable_file}"
 start_mpv "${@}"
-[ -n "${nc_pid}" ] && wait "${nc_pid}"
+[ -n "${lc_pid}" ] && wait "${lc_pid}"
