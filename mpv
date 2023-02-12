@@ -4,7 +4,7 @@
 #
 # Github: https://github.com/TheGlockMisc/mpv-android-argparse
 
-VERSION="v0.1.5"
+VERSION="v0.1.6"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp.mp4"	# mp4 extension to bypass restriction for multimedia only permission
@@ -18,6 +18,15 @@ err(){
 
 suc(){
 	printf "\033[38;5;2m%b\033[0m\n" "${1}"
+}
+
+kill_jobs(){
+	kill "${lc_pid}"
+	if [ -n "$(jobs -p)" ]; then
+		jobs -p | while read -r jobs; do
+			kill "${jobs}"
+		done
+	fi
 }
 
 if [ -w "${app_readable_dir%*/mpv}" ]; then
@@ -38,9 +47,11 @@ show_help(){
 	    ${0##*/} -v | -h | -l
 		
 	 Options:
-	    -v Print Version and Exit
-	    -h Print Help
-	    -l Dump Log in stdout (default: disabled)
+	    -v  Print Version and Exit
+	    -q  Only output errors
+	    -lc Use http server (for local termux files)
+	    -h  Print Help
+	    -l  Dump Log in stdout (default: disabled)
 		
 	Use "-" to receive url from stdin.
 	"--http-header-fields" headers was delimited using "|".
@@ -55,7 +66,7 @@ mainstripper(){
 	printf '%s\n' "${@}" | \
 	sed -E 's_---__g	
 	s_--__g' | \
-	sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l)$/d
+	sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc)$/d
 	s_\x27__g
 	s_\x22__g
 	/.*=/ {
@@ -79,21 +90,42 @@ inter_loop(){
 	trap "killall -9 tail && exit 1" INT HUP
 	while true; do
 		sleep 3
-		grep -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)' "${app_readable_dir}/var.log" && { pkill -9 tail ; exit 0 ;}
+		grep -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)' "${app_readable_dir}/var.log" && { killall -9 tail ; exit 0 ;}
 	done
 }
 
 start_mpv(){
 	for iter; do
-		if printf '%s' "${iter}" | grep -qEo "^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)[^'\"<>]*|^-$"; then
+		if printf '%s' "${iter}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$"; then
 			[ "${iter}" = "-" ] && set -- "${stdinurl}" && break
 			set -- "${iter}" && break
 		fi
 	done
 	[ -z "${1}" ] && err 'Exception: No Video URL provided'
-	printf '%s' "${1}" | grep -qEo "(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)[^'\"<>]*" || err "Invalid type of URL"
+	printf '%s' "${1}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$" || err "Invalid type of URL"
+	if printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
+		if printf '%s' "${1#file://}" | grep -qE '~'; then
+			path_file=~/"${1#*~/}"
+			path_file="$(realpath -q "${path_file#file://}")"
+		else
+			path_file="$(realpath -q "${1#file://}")"
+		fi
+		[ -e "${path_file}" ] || err "mpv: ${path_file#file://}: No such file or directory"
+		set -- "file://${path_file}"
+	fi
+	if [ "${lc_use}" = "1" ] && printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
+		command -v "darkhttpd" >/dev/null || err "Install darkhttpd first!"
+		random_port="$(awk -v lh="3000" -v rh="7000" 'BEGIN{srand(); print int(lh+rand()*(rh-lh+1))}')"
+		dir_file="${1#file://}" dir_file="${dir_file%/*}"
+		name_file="${1##*/}"
+		darkhttpd "${dir_file}" --index "${name_file}" --port "${random_port}" >/dev/null 2>&1 &
+		lc_pid="${!}"
+		[ "${quiet}" = "1" ] || suc 'press "CTRL + C" to quit'
+		set -- "http://0.0.0.0:${random_port}"
+		trap "kill_jobs ; exit 0" INT HUP
+	fi
 	am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
-	suc "Video Successfully Launched!"
+	[ "${quiet}" = "1" ] || suc "Video Successfully Launched!"
 	# Delay to start activity first before clearing the temp file
 	(sleep 5 && : > "${app_readable_file}") &
 	[ "${show_log}" = "true" ] && inter_loop
@@ -105,6 +137,12 @@ arg_parser(){
 			-v)
 				printf '%s\n' "Version: ${VERSION}"
 				exit 0
+				;;
+			-q)
+				quiet=1
+				;;
+			-lc)
+				lc_use=1
 				;;
 			-h)
 				show_help
@@ -120,3 +158,4 @@ arg_parser(){
 arg_parser "${@}"
 mainstripper "${@}" "--log-file=${app_readable_dir}/var.log" > "${app_readable_file}"
 start_mpv "${@}"
+[ -n "${lc_pid}" ] && wait "${lc_pid}"
