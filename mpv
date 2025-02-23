@@ -4,7 +4,7 @@
 #
 # Github: https://github.com/Rendevior/mpv-android-argparse
 
-VERSION="v0.1.7"
+VERSION="v0.1.8"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp.mp4"	# mp4 extension to bypass restriction for multimedia only permission
@@ -21,11 +21,11 @@ suc(){
 }
 
 kill_jobs(){
-	kill "${lc_pid}" >/dev/null 2>&1
-	kill "${tail_pid}" >/dev/null 2>&1
+	kill "${lc_pid}" >/dev/null 2>&1 || true
+	kill "${tail_pid}" >/dev/null 2>&1 || true
 	if [ -n "$(jobs -p)" ]; then
 		jobs -p | while read -r jobs; do
-			kill "${jobs}"
+			kill "${jobs}" >/dev/null 2>&1 || true
 		done
 	fi
 }
@@ -65,7 +65,7 @@ show_help(){
 # main
 mainstripper(){
 	printf '%s\n' "${@}" | \
-	sed -E 's_---__g	
+	sed -E 's_---__g
 	s_--__g' | \
 	sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc)$/d
 	s_\x27__g
@@ -126,10 +126,18 @@ start_mpv(){
 		set -- "http://0.0.0.0:${random_port}"
 		trap "kill_jobs ; exit 0" INT HUP
 	fi
-	am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
+	# set mpv+ytdl as fallback
+	# set delay to start activity first before clearing the temp file
+	if am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1; then
+		(sleep 5 && : > "${app_readable_file}") &
+	else
+		if am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv.ytdl/is.xyz.mpv.MPVActivity' >/dev/null 2>&1; then
+			(sleep 5 && : > "${app_readable_file}") &
+		else
+			err "Exception: Failed to launch due to restrictions. Or the MPV android isn\'t installed."
+		fi
+	fi
 	[ "${quiet}" = "1" ] || suc "Video Successfully Launched!"
-	# Delay to start activity first before clearing the temp file
-	(sleep 5 && : > "${app_readable_file}") &
 }
 
 arg_parser(){
@@ -159,4 +167,8 @@ arg_parser(){
 arg_parser "${@}"
 mainstripper "${@}" "--log-file=${app_readable_dir}/var.log" > "${app_readable_file}"
 start_mpv "${@}"
-[ "${show_log}" = "true" ] && inter_loop || [ -n "${lc_pid}" ] && wait "${lc_pid}"
+if [ "${show_log}" = "true" ]; then
+	inter_loop
+else
+	[ -n "${lc_pid}" ] && wait "${lc_pid}"
+fi
