@@ -8,6 +8,7 @@ VERSION="v0.1.8"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp.mp4"	# mp4 extension to bypass restriction for multimedia only permission
+player="default"
 [ ! -t 0 ] && stdinurl="$(awk '{print $0}')"
 
 # Input Colors
@@ -48,11 +49,12 @@ show_help(){
 	    ${0##*/} -v | -h | -l
 		
 	 Options:
-	    -v  Print Version and Exit
-	    -q  Only output errors
-	    -lc Use http server (for local termux files)
-	    -h  Print Help
-	    -l  Dump Log in stdout (default: disabled)
+	    -v           Print Version and Exit
+	    -q           Only output errors
+	    -lc          Use http server (for local termux files)
+	    -p=[player]  Specify player (mpvkt, mpvytdl, default)
+	    -h           Print Help
+	    -l           Dump Log in stdout (default: disabled)
 		
 	Use "-" to receive url from stdin.
 	"--http-header-fields" headers was delimited using "|".
@@ -67,7 +69,7 @@ mainstripper(){
 	printf '%s\n' "${@}" | \
 	sed -E 's_---__g
 	s_--__g' | \
-	sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc)$/d
+	sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc|p=(mpvkt|mpvytdl|default))$/d
 	s_\x27__g
 	s_\x22__g
 	/.*=/ {
@@ -126,40 +128,64 @@ start_mpv(){
 		set -- "http://0.0.0.0:${random_port}"
 		trap "kill_jobs ; exit 0" INT HUP
 	fi
-	# set mpv+ytdl as fallback
 	# set delay to start activity first before clearing the temp file
-	if am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1; then
-		(sleep 5 && : > "${app_readable_file}") &
+	
+	case "${player}" in
+	    mpvkt)
+	        am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -p 'live.mehiz.mpvkt' >/dev/null 2>&1
+	        xcode_mpv="$?"
+	        ;;
+	    mpvytdl)
+	        am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv.ytdl/is.xyz.mpv.MPVActivity' >/dev/null 2>&1
+	        xcode_mpv="$?"
+	        ;;
+	    default)
+	        am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
+	        xcode_mpv="$?"
+	        ;;
+	    *)
+	        err "Exception: Invalid player"
+	        ;;
+	esac
+	if [ "${xcode_mpv}" = 0 ]; then
+	    (sleep 10 && : > "${app_readable_file}") &
 	else
-		if am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv.ytdl/is.xyz.mpv.MPVActivity' >/dev/null 2>&1; then
-			(sleep 5 && : > "${app_readable_file}") &
-		else
-			err "Exception: Failed to launch due to restrictions. Or the MPV android isn\'t installed."
-		fi
+	    err "Exception: Failed to launch due to restrictions. Or the MPV android isn\'t installed."
 	fi
 	[ "${quiet}" = "1" ] || suc "Video Successfully Launched!"
 }
 
 arg_parser(){
-	for arg; do
-		case "${arg}" in
+	while [ "${#}" -gt 0 ]; do
+		case "${1}" in
 			-v)
 				printf '%s\n' "Version: ${VERSION}"
 				exit 0
 				;;
 			-q)
 				quiet=1
+				shift 1
 				;;
 			-lc)
 				lc_use=1
+				shift 1
 				;;
 			-h)
 				show_help
 				exit 0
 				;;
+			-p=mpvkt|-p=mpvytdl|-p=default)
+			    player="${1#*=}"
+			    [ "${player}" = "mpvkt" ] && app_readable_file="/storage/emulated/0/mpv/mpv.conf"
+			    shift 1
+			    ;;
 			-l)
 				show_log="true"
+				shift 1
 				;;
+			*)
+			    shift 1
+			    ;;
 		esac
 	done
 }
