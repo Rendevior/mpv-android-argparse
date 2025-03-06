@@ -4,7 +4,7 @@
 #
 # Github: https://github.com/Rendevior/mpv-android-argparse
 
-VERSION="v0.1.8"
+VERSION="v0.1.9"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp.mp4"    # mp4 extension to bypass restriction for multimedia only permission
