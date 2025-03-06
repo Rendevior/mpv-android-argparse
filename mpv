@@ -7,41 +7,41 @@
 VERSION="v0.1.8"
 
 app_readable_dir="/storage/emulated/0/mpv"
-app_readable_file="${app_readable_dir}/mpv.tmp.mp4"	# mp4 extension to bypass restriction for multimedia only permission
+app_readable_file="${app_readable_dir}/mpv.tmp.mp4"    # mp4 extension to bypass restriction for multimedia only permission
 player="default"
 [ ! -t 0 ] && stdinurl="$(awk '{print $0}')"
 
 # Input Colors
 err(){
-	printf "\033[38;5;1m%b\033[0m\n" "${1}" >&2
-	exit 1
+    printf "\033[38;5;1m%b\033[0m\n" "${1}" >&2
+    exit 1
 }
 
 suc(){
-	printf "\033[38;5;2m%b\033[0m\n" "${1}"
+    printf "\033[38;5;2m%b\033[0m\n" "${1}"
 }
 
 kill_jobs(){
-	kill "${lc_pid}" >/dev/null 2>&1 || true
-	kill "${tail_pid}" >/dev/null 2>&1 || true
-	if [ -n "$(jobs -p)" ]; then
-		jobs -p | while read -r jobs; do
-			kill "${jobs}" >/dev/null 2>&1 || true
-		done
-	fi
+    kill "${lc_pid}" >/dev/null 2>&1 || true
+    kill "${tail_pid}" >/dev/null 2>&1 || true
+    if [ -n "$(jobs -p)" ]; then
+        jobs -p | while read -r jobs; do
+            kill "${jobs}" >/dev/null 2>&1 || true
+        done
+    fi
 }
 
 if [ -w "${app_readable_dir%*/mpv}" ]; then
-	[ -d "${app_readable_dir}" ] || mkdir "${app_readable_dir}"
-	[ -e "${app_readable_dir}/var.log" ] && : > "${app_readable_dir}/var.log"
+    [ -d "${app_readable_dir}" ] || mkdir "${app_readable_dir}"
+    [ -e "${app_readable_dir}/var.log" ] && : > "${app_readable_dir}/var.log"
 else
-	err "Exception: \"${app_readable_dir%*/mpv}\" is unwritable, make sure you have storage permission"
+    err "Exception: \"${app_readable_dir%*/mpv}\" is unwritable, make sure you have storage permission"
 fi
 
 show_help(){
-	while IFS= read -r line; do
-		printf "%b\n" "${line}"
-	done <<-EOF
+    while IFS= read -r line; do
+        printf "%b\n" "${line}"
+    done <<-EOF
 	Program that lets you pass argument to mpv-android.
 	
 	 Usage:
@@ -67,146 +67,146 @@ show_help(){
 # main
 mainstripper(){
     printf '\n\n%s\n' "# wrapper options temporarily applied:"
-	printf '%s\n' "${@}" | \
-	sed -E 's_---__g
-	s_--__g' | \
-	sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc|p=(mpvkt|mpvytdl|default))$/d
-	s_\x27__g
-	s_\x22__g
-	/.*=/ {
-		s_(=)(.*)_\1\x22\2\x22_
-		s_[[:space:]]\x22\$_\x22_g
-	}
-	/msg-level/ {
-		s_\x22__g
-	}
-	/http-header/ {
-		s_\x22__g
-		s_(=)(.*)_\1\x27\2\x27_
-		s_\|_\x27, \x27_g
-	}
-	s_[[:space:]]\$__g
-	s_\x27[[:space:]]_\x27_g"
+    printf '%s\n' "${@}" | \
+    sed -E 's_---__g
+    s_--__g' | \
+    sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc|p=(mpvkt|mpvytdl|default))$/d
+    s_\x27__g
+    s_\x22__g
+    /.*=/ {
+        s_(=)(.*)_\1\x22\2\x22_
+        s_[[:space:]]\x22\$_\x22_g
+    }
+    /msg-level/ {
+        s_\x22__g
+    }
+    /http-header/ {
+        s_\x22__g
+        s_(=)(.*)_\1\x27\2\x27_
+        s_\|_\x27, \x27_g
+    }
+    s_[[:space:]]\$__g
+    s_\x27[[:space:]]_\x27_g"
 }
 
 inter_loop(){
-	tail -f "${app_readable_dir}/var.log" 2>/dev/null | grep -a --line-buffer -v "vo/gpu/opengl" &
-	tail_pid="${!}"
-	trap "kill_jobs ; exit 0" INT HUP
-	while true; do
-		sleep 3
-		grep -a -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)|(EOF reached.)' "${app_readable_dir}/var.log" && { kill_jobs ; exit 0 ;}
-	done
+    tail -f "${app_readable_dir}/var.log" 2>/dev/null | grep -a --line-buffer -v "vo/gpu/opengl" &
+    tail_pid="${!}"
+    trap "kill_jobs ; exit 0" INT HUP
+    while true; do
+        sleep 3
+        grep -a -Pq '\[(main|cplayer)\] (Exiting.*|.*quit\,)|(EOF reached.)' "${app_readable_dir}/var.log" && { kill_jobs ; exit 0 ;}
+    done
 }
 
 start_mpv(){
-	for iter; do
-		if printf '%s' "${iter}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$"; then
-			[ "${iter}" = "-" ] && set -- "${stdinurl}" && break
-			set -- "${iter}" && break
-		fi
-	done
-	[ -z "${1}" ] && err 'Exception: No Video URL provided'
-	printf '%s' "${1}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$" || err "Invalid type of URL"
-	if printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
-		if printf '%s' "${1#file://}" | grep -qE '~'; then
-			path_file=~/"${1#*~/}"
-			path_file="$(realpath -q "${path_file#file://}")"
-		else
-			path_file="$(realpath -q "${1#file://}")"
-		fi
-		[ -e "${path_file}" ] || err "mpv: ${path_file#file://}: No such file or directory"
-		set -- "file://${path_file}"
-	fi
-	if [ "${lc_use}" = "1" ] && printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
-		command -v "darkhttpd" >/dev/null || err "Install darkhttpd first!"
-		random_port="$(awk -v lh="3000" -v rh="7000" 'BEGIN{srand(); print int(lh+rand()*(rh-lh+1))}')"
-		dir_file="${1#file://}" dir_file="${dir_file%/*}"
-		name_file="${1##*/}"
-		darkhttpd "${dir_file}" --index "${name_file}" --port "${random_port}" >/dev/null 2>&1 &
-		lc_pid="${!}"
-		[ "${quiet}" = "1" ] || suc 'press "CTRL + C" to quit'
-		set -- "http://0.0.0.0:${random_port}"
-		trap "kill_jobs ; exit 0" INT HUP
-	fi
-	# set delay to start activity first before clearing the temp file
-	
-	case "${player}" in
-	    mpvkt)
-	        am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -p 'live.mehiz.mpvkt' >/dev/null 2>&1
-	        xcode_mpv="$?"
-	        ;;
-	    mpvytdl)
-	        am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv.ytdl/is.xyz.mpv.MPVActivity' >/dev/null 2>&1
-	        xcode_mpv="$?"
-	        ;;
-	    default)
-	        am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
-	        xcode_mpv="$?"
-	        ;;
-	    *)
-	        err "Exception: Invalid player"
-	        ;;
-	esac
-	if [ "${xcode_mpv}" = 0 ]; then
-	    (
-	        sleep 5
-	        if [ "${player}" = "mpvkt" ]; then
-	            mv "${app_readable_file}".bak "${app_readable_file}"
-	        else
-	            : > "${app_readable_file}"
-	        fi
-	    ) &
-	else
-	    err "Exception: Failed to launch due to restrictions. Or the MPV android isn\'t installed."
-	fi
-	[ "${quiet}" = "1" ] || suc "Video Successfully Launched!"
+    for iter; do
+        if printf '%s' "${iter}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$"; then
+            [ "${iter}" = "-" ] && set -- "${stdinurl}" && break
+            set -- "${iter}" && break
+        fi
+    done
+    [ -z "${1}" ] && err 'Exception: No Video URL provided'
+    printf '%s' "${1}" | grep -qEo "^(file://|http://|https://|ytdl://|smb://|bd://)[^'\"<>]*|^-$" || err "Invalid type of URL"
+    if printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
+        if printf '%s' "${1#file://}" | grep -qE '~'; then
+            path_file=~/"${1#*~/}"
+            path_file="$(realpath -q "${path_file#file://}")"
+        else
+            path_file="$(realpath -q "${1#file://}")"
+        fi
+        [ -e "${path_file}" ] || err "mpv: ${path_file#file://}: No such file or directory"
+        set -- "file://${path_file}"
+    fi
+    if [ "${lc_use}" = "1" ] && printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
+        command -v "darkhttpd" >/dev/null || err "Install darkhttpd first!"
+        random_port="$(awk -v lh="3000" -v rh="7000" 'BEGIN{srand(); print int(lh+rand()*(rh-lh+1))}')"
+        dir_file="${1#file://}" dir_file="${dir_file%/*}"
+        name_file="${1##*/}"
+        darkhttpd "${dir_file}" --index "${name_file}" --port "${random_port}" >/dev/null 2>&1 &
+        lc_pid="${!}"
+        [ "${quiet}" = "1" ] || suc 'press "CTRL + C" to quit'
+        set -- "http://0.0.0.0:${random_port}"
+        trap "kill_jobs ; exit 0" INT HUP
+    fi
+    # set delay to start activity first before clearing the temp file
+    
+    case "${player}" in
+        mpvkt)
+            am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -p 'live.mehiz.mpvkt' >/dev/null 2>&1
+            xcode_mpv="$?"
+            ;;
+        mpvytdl)
+            am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv.ytdl/is.xyz.mpv.MPVActivity' >/dev/null 2>&1
+            xcode_mpv="$?"
+            ;;
+        default)
+            am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -n 'is.xyz.mpv/.MPVActivity' >/dev/null 2>&1
+            xcode_mpv="$?"
+            ;;
+        *)
+            err "Exception: Invalid player"
+            ;;
+    esac
+    if [ "${xcode_mpv}" = 0 ]; then
+        (
+            sleep 5
+            if [ "${player}" = "mpvkt" ]; then
+                mv "${app_readable_file}".bak "${app_readable_file}"
+            else
+                : > "${app_readable_file}"
+            fi
+        ) &
+    else
+        err "Exception: Failed to launch due to restrictions. Or the MPV android isn\'t installed."
+    fi
+    [ "${quiet}" = "1" ] || suc "Video Successfully Launched!"
 }
 
 arg_parser(){
-	while [ "${#}" -gt 0 ]; do
-		case "${1}" in
-			-v)
-				printf '%s\n' "Version: ${VERSION}"
-				exit 0
-				;;
-			-q)
-				quiet=1
-				shift 1
-				;;
-			-lc)
-				lc_use=1
-				shift 1
-				;;
-			-h)
-				show_help
-				exit 0
-				;;
-			-p=mpvkt|-p=mpvytdl|-p=default)
-			    player="${1#*=}"
-			    if [ "${player}" = "mpvkt" ]; then
-			        app_readable_file="/storage/emulated/0/mpv/mpv.conf"
-			        # backup user current mpv config
-			        cp "${app_readable_file}" "${app_readable_file}".bak
-			    fi
-			    shift 1
-			    ;;
-			-l)
-				show_log="true"
-				shift 1
-				;;
-			*)
-			    shift 1
-			    ;;
-		esac
-	done
+    while [ "${#}" -gt 0 ]; do
+        case "${1}" in
+            -v)
+                printf '%s\n' "Version: ${VERSION}"
+                exit 0
+                ;;
+            -q)
+                quiet=1
+                shift 1
+                ;;
+            -lc)
+                lc_use=1
+                shift 1
+                ;;
+            -h)
+                show_help
+                exit 0
+                ;;
+            -p=mpvkt|-p=mpvytdl|-p=default)
+                player="${1#*=}"
+                if [ "${player}" = "mpvkt" ]; then
+                    app_readable_file="/storage/emulated/0/mpv/mpv.conf"
+                    # backup user current mpv config
+                    cp "${app_readable_file}" "${app_readable_file}".bak
+                fi
+                shift 1
+                ;;
+            -l)
+                show_log="true"
+                shift 1
+                ;;
+            *)
+                shift 1
+                ;;
+        esac
+    done
 }
 
 arg_parser "${@}"
 mainstripper "${@}" "--log-file=${app_readable_dir}/var.log" >> "${app_readable_file}"
 start_mpv "${@}"
 if [ "${show_log}" = "true" ]; then
-	inter_loop
+    inter_loop
 else
-	[ -n "${lc_pid}" ] && wait "${lc_pid}"
+    [ -n "${lc_pid}" ] && wait "${lc_pid}"
 fi
