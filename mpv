@@ -31,13 +31,6 @@ kill_jobs(){
     fi
 }
 
-if [ -w "${app_readable_dir%*/mpv}" ]; then
-    [ -d "${app_readable_dir}" ] || mkdir "${app_readable_dir}"
-    [ -e "${app_readable_dir}/var.log" ] && : > "${app_readable_dir}/var.log"
-else
-    err "Exception: \"${app_readable_dir%*/mpv}\" is unwritable, make sure you have storage permission"
-fi
-
 show_help(){
     while IFS= read -r line; do
         printf "%b\n" "${line}"
@@ -201,6 +194,14 @@ arg_parser(){
         esac
     done
 }
+
+if [ -w "${app_readable_dir%*/mpv}" ]; then
+    [ -d "${app_readable_dir}" ] || mkdir "${app_readable_dir}"
+    [ -e "${app_readable_dir}/var.log" ] && : > "${app_readable_dir}/var.log"
+    [ -e "${app_readable_file}" ] && : > "${app_readable_file}"
+else
+    err "Exception: \"${app_readable_dir%*/mpv}\" is unwritable, make sure you have storage permission"
+fi
 
 arg_parser "${@}"
 mainstripper "${@}" "--log-file=${app_readable_dir}/var.log" >> "${app_readable_file}"
