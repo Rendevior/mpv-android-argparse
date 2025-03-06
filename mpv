@@ -45,7 +45,7 @@ show_help(){
 	    -v           Print Version and Exit
 	    -q           Only output errors
 	    -lc          Use http server (for local termux files)
-	    -p=[player]  Specify player (mpvkt, mpvytdl, default)
+	    -p=[player]  Specify player (mpvkt, mpvktpre, mpvytdl, default)
 	    -h           Print Help
 	    -l           Dump Log in stdout (default: disabled)
 		
@@ -63,7 +63,7 @@ mainstripper(){
     printf '%s\n' "${@}" | \
     sed -E 's_---__g
     s_--__g' | \
-    sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc|p=(mpvkt|mpvytdl|default))$/d
+    sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc|p=(mpvkt|mpvktpre|mpvytdl|default))$/d
     s_\x27__g
     s_\x22__g
     /.*=/ {
@@ -126,7 +126,11 @@ start_mpv(){
     
     case "${player}" in
         mpvkt)
-            am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -p 'live.mehiz.mpvkt' >/dev/null 2>&1
+            am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -n 'live.mehiz.mpvkt/.ui.player.PlayerActivity' >/dev/null 2>&1
+            xcode_mpv="$?"
+            ;;
+        mpvktpre)
+            am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -n 'live.mehiz.mpvkt.preview/live.mehiz.mpvkt.ui.player.PlayerActivity' >/dev/null 2>&1
             xcode_mpv="$?"
             ;;
         mpvytdl)
@@ -144,7 +148,7 @@ start_mpv(){
     if [ "${xcode_mpv}" = 0 ]; then
         (
             sleep 5
-            if [ "${player}" = "mpvkt" ]; then
+            if [ "${player}" = "mpvkt" ] || [ "${player}" = "mpvktpre" ]; then
                 mv "${app_readable_file}".bak "${app_readable_file}"
             else
                 : > "${app_readable_file}"
@@ -175,9 +179,9 @@ arg_parser(){
                 show_help
                 exit 0
                 ;;
-            -p=mpvkt|-p=mpvytdl|-p=default)
+            -p=mpvkt|-p=mpvktpre|-p=mpvytdl|-p=default)
                 player="${1#*=}"
-                if [ "${player}" = "mpvkt" ]; then
+                if [ "${player}" = "mpvkt" ] || [ "${player}" = "mpvktpre" ]; then
                     app_readable_file="/storage/emulated/0/mpv/mpv.conf"
                     # backup user current mpv config
                     cp "${app_readable_file}" "${app_readable_file}".bak
