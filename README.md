@@ -14,6 +14,8 @@ chmod +x "$PREFIX/bin/mpv"
 - Advanced
 - Edit mpv.conf
 - And insert this `include="/storage/emulated/0/mpv/mpv.tmp.mp4"`
+> [!NOTE]
+> When setting up on `mpvkt` you must add `/storage/emulated/0/mpv` on `pick mpv configuration storage location`
 - Click "Save"
 # How to Run
 Thats it:
