@@ -4,7 +4,7 @@
 #
 # Github: https://github.com/Rendevior/mpv-android-argparse
 
-VERSION="v0.1.9"
+VERSION="v0.1.9-1"
 
 app_readable_dir="/storage/emulated/0/mpv"
 app_readable_file="${app_readable_dir}/mpv.tmp.mp4"    # mp4 extension to bypass restriction for multimedia only permission
@@ -45,7 +45,7 @@ show_help(){
 	    -v           Print Version and Exit
 	    -q           Only output errors
 	    -lc          Use http server (for local termux files)
-	    -p=[player]  Specify player (mpvkt, mpvktpre, mpvytdl, default)
+	    -p=[player]  Specify player (mpvkt, mpvytdl, mpvktpre, default)
 	    -h           Print Help
 	    -l           Dump Log in stdout (default: disabled)
 		
@@ -63,7 +63,7 @@ mainstripper(){
     printf '%s\n' "${@}" | \
     sed -E 's_---__g
     s_--__g' | \
-    sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc|p=(mpvkt|mpvktpre|mpvytdl|default))$/d
+    sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc|p=(mpvkt|mpvytdl|mpvktpre|default))$/d
     s_\x27__g
     s_\x22__g
     /.*=/ {
@@ -112,14 +112,30 @@ start_mpv(){
         set -- "file://${path_file}"
     fi
     if [ "${lc_use}" = "1" ] && printf '%s' "${1}" | grep -qEo "file://[^'\"<>]*"; then
-        command -v "darkhttpd" >/dev/null || err "Install darkhttpd first!"
+        command -v python3 >/dev/null || err "Install python3 first!"
+        if ! python3 -c "import http.server" >/dev/null 2>&1; then
+            err "Python 'http.server' module not found. Make sure your python server is 3.7 and up."
+        fi
         random_port="$(awk -v lh="3000" -v rh="7000" 'BEGIN{srand(); print int(lh+rand()*(rh-lh+1))}')"
         dir_file="${1#file://}" dir_file="${dir_file%/*}"
         name_file="${1##*/}"
-        darkhttpd "${dir_file}" --index "${name_file}" --port "${random_port}" >/dev/null 2>&1 &
+        
+        is_abs=0
+        case "${dir_file}" in
+            /*) is_abs=1 ;;
+        esac
+        
+        if [ "${name_file}" = "${dir_file}" ]; then
+            dir_file="."
+        elif [ -z "${dir_file}" ] && [ "${is_abs}" = "1" ]; then
+            dir_file="/"
+        fi
+        
+        # req Python 3.7 up.
+        python3 -m http.server --directory "${dir_file}" "${random_port}" >/dev/null 2>&1 &
         lc_pid="${!}"
         [ "${quiet}" = "1" ] || suc 'press "CTRL + C" to quit'
-        set -- "http://0.0.0.0:${random_port}"
+        set -- "http://0.0.0.0:${random_port}/${name_file}"
         trap "kill_jobs ; exit 0" INT HUP
     fi
     # set delay to start activity first before clearing the temp file
@@ -128,7 +144,6 @@ start_mpv(){
         mpvkt)
             am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -n 'live.mehiz.mpvkt/.ui.player.PlayerActivity' >/dev/null 2>&1
             xcode_mpv="$?"
-            ;;
         mpvktpre)
             am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -n 'live.mehiz.mpvkt.preview/live.mehiz.mpvkt.ui.player.PlayerActivity' >/dev/null 2>&1
             xcode_mpv="$?"
@@ -175,11 +190,11 @@ arg_parser(){
                 lc_use=1
                 shift 1
                 ;;
-            -h)
+            -h|--help)
                 show_help
                 exit 0
                 ;;
-            -p=mpvkt|-p=mpvktpre|-p=mpvytdl|-p=default)
+            -p=mpvkt|-p=mpvytdl|-p=mpvktpre|-p=default)
                 player="${1#*=}"
                 if [ "${player}" = "mpvkt" ] || [ "${player}" = "mpvktpre" ]; then
                     app_readable_file="/storage/emulated/0/mpv/mpv.conf"
