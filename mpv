@@ -63,7 +63,7 @@ mainstripper(){
     printf '%s\n' "${@}" | \
     sed -E 's_---__g
     s_--__g' | \
-    sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc|p=(mpvkt|mpvytdl|mpvktpre|default))$/d
+    sed -E "/^(file:\/\/|http:\/\/|https:\/\/|ytdl:\/\/|smb:\/\/|bd:\/\/)|^-$|^-(h|v|l|q|lc|p=(mpvkt|mpvytdl|mpvktpre|default))|^--help$/d
     s_\x27__g
     s_\x22__g
     /.*=/ {
@@ -170,7 +170,7 @@ start_mpv(){
             fi
         ) &
     else
-        err "Exception: Failed to launch due to restrictions. Or the MPV android isn\'t installed."
+        err "Exception: Failed to launch due to restrictions. Or the MPV android isn't installed."
     fi
     [ "${quiet}" = "1" ] || suc "Video Successfully Launched!"
 }
