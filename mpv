@@ -144,6 +144,7 @@ start_mpv(){
         mpvkt)
             am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -n 'live.mehiz.mpvkt/.ui.player.PlayerActivity' >/dev/null 2>&1
             xcode_mpv="$?"
+            ;;
         mpvktpre)
             am start --user current -R 2 -a android.intent.action.VIEW -d "${1}" -t video/any -n 'live.mehiz.mpvkt.preview/live.mehiz.mpvkt.ui.player.PlayerActivity' >/dev/null 2>&1
             xcode_mpv="$?"
